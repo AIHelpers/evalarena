@@ -1,0 +1,97 @@
+:root {
+  --ink: #1a1a1a;
+  --muted: #6b6b6b;
+  --bg: #fafafa;
+  --card: #ffffff;
+  --border: #e4e4e4;
+  --accent: #4f46e5;
+  --accent-b: #e5484f;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+header h1 { font-size: 18px; margin: 0; }
+nav { display: flex; gap: 8px; }
+.nav-btn, .tab-btn {
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted);
+}
+.nav-btn.active, .tab-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+main { max-width: 920px; margin: 0 auto; padding: 24px 20px 80px; }
+h2 { margin-top: 0; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 14px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.arena-card { cursor: pointer; transition: box-shadow .15s; }
+.arena-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+.arena-card h3 { margin: 0 0 6px; font-size: 15px; }
+.arena-card .muted { font-size: 12px; color: var(--muted); }
+.form { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.form input, .form select, .form textarea {
+  font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; color: var(--ink);
+}
+.matchup-field {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  position: relative;
+  margin-top: 6px;
+}
+.matchup-field legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+button.primary, .primary-link {
+  background: var(--accent); color: #fff; border: none; padding: 10px 18px;
+  border-radius: 8px; cursor: pointer; font-size: 14px; align-self: flex-start;
+  text-decoration: none; display: inline-block;
+}
+#add-matchup, .remove-matchup { align-self: flex-start; background: none; border: 1px dashed var(--border); padding: 6px 12px; border-radius: 7px; cursor: pointer; color: var(--muted); }
+.arena-header { display: flex; align-items: center; justify-content: space-between; }
+.tabs { display: flex; gap: 8px; }
+.tab-panel.hidden { display: none; }
+.review-setup { margin-bottom: 16px; max-width: 320px; }
+.review-setup input { width: 100%; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--border); font: inherit; }
+.review-card.hidden { display: none; }
+.prompt-box { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 14px; }
+.prompt-box p { margin: 6px 0 0; white-space: pre-wrap; }
+.candidates { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.candidate { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.candidate h3 { margin: 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.candidate pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; margin: 0; max-height: 360px; overflow-y: auto; }
+.pick-btn { border: 1px solid var(--border); background: #fff; padding: 9px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.pick-btn:hover { background: #f0f0f7; }
+.review-actions { display: flex; justify-content: center; margin-top: 14px; }
+.pick-btn.tie { padding: 8px 22px; }
+.progress { text-align: center; color: var(--muted); font-size: 12px; margin-top: 10px; }
+.results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 14px; }
+.bar-wrap { height: 26px; border-radius: 6px; overflow: hidden; display: flex; background: #eee; margin: 8px 0; }
+.bar-a { background: var(--accent); }
+.bar-b { background: var(--accent-b); flex: 1; }
+.muted { color: var(--muted); font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); }
