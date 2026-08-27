@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EvalArena</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>⚔️ EvalArena</h1>
+    <nav>
+      <button data-view="arenas" class="nav-btn active">Arenas</button>
+      <button data-view="create" class="nav-btn">New Arena</button>
+    </nav>
+  </header>
+
+  <main id="app"></main>
+
+  <template id="tpl-arena-list">
+    <section>
+      <h2>Arenas</h2>
+      <div id="arena-list" class="card-grid"></div>
+    </section>
+  </template>
+
+  <template id="tpl-create-arena">
+    <section>
+      <h2>New Arena</h2>
+      <form id="create-form" class="form">
+        <label>Arena name <input name="name" required placeholder="base vs finetune-v3"></label>
+        <label>Mode
+          <select name="mode">
+            <option value="pairwise">Pairwise (A/B)</option>
+            <option value="tournament">Tournament (3+ candidates)</option>
+          </select>
+        </label>
+        <div id="matchup-fields"></div>
+        <button type="button" id="add-matchup">+ Add prompt</button>
+        <button type="submit" class="primary">Create Arena</button>
+      </form>
+    </section>
+  </template>
+
+  <template id="tpl-matchup-field">
+    <fieldset class="matchup-field">
+      <legend>Prompt</legend>
+      <label>Prompt text <textarea name="prompt" rows="2" required></textarea></label>
+      <label>Category (optional) <input name="category" placeholder="reasoning, tone, factual..."></label>
+      <label>Candidate A label <input name="labelA" placeholder="base-model"></label>
+      <label>Candidate A output <textarea name="outputA" rows="4" required></textarea></label>
+      <label>Candidate B label <input name="labelB" placeholder="finetune-v3"></label>
+      <label>Candidate B output <textarea name="outputB" rows="4" required></textarea></label>
+      <button type="button" class="remove-matchup">Remove</button>
+    </fieldset>
+  </template>
+
+  <template id="tpl-arena-detail">
+    <section>
+      <div class="arena-header">
+        <h2></h2>
+        <div class="tabs">
+          <button data-tab="review" class="tab-btn active">Review</button>
+          <button data-tab="results" class="tab-btn">Results</button>
+        </div>
+      </div>
+      <div id="tab-review" class="tab-panel"></div>
+      <div id="tab-results" class="tab-panel hidden"></div>
+    </section>
+  </template>
+
+  <template id="tpl-review">
+    <div class="review-setup">
+      <label>Your reviewer name/ID
+        <input id="reviewer-id" placeholder="alice">
+      </label>
+    </div>
+    <div id="review-card" class="review-card hidden">
+      <div class="prompt-box"><strong>Prompt</strong><p id="review-prompt"></p></div>
+      <div class="candidates" id="pairwise-candidates">
+        <div class="candidate" id="cand-left">
+          <h3>Option A</h3>
+          <pre id="text-left"></pre>
+          <button class="pick-btn" data-pick="A">A wins (←)</button>
+        </div>
+        <div class="candidate" id="cand-right">
+          <h3>Option B</h3>
+          <pre id="text-right"></pre>
+          <button class="pick-btn" data-pick="B">B wins (→)</button>
+        </div>
+      </div>
+      <div class="candidates" id="tournament-candidates"></div>
+      <div class="review-actions">
+        <button class="pick-btn tie" data-pick="tie">Tie (Space)</button>
+      </div>
+      <div class="progress"></div>
+    </div>
+  </template>
+
+  <template id="tpl-results">
+    <div class="results-grid">
+      <div class="card">
+        <h3>Overall</h3>
+        <div id="overall-bar" class="bar-wrap"></div>
+        <p id="overall-summary" class="muted"></p>
+      </div>
+      <div class="card">
+        <h3>By Category</h3>
+        <table id="category-table"><thead><tr><th>Category</th><th>A win rate</th><th>A</th><th>B</th><th>Tie</th><th>95% CI</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card" id="elo-card" style="display:none">
+        <h3>Tournament Ranking</h3>
+        <table id="elo-table"><thead><tr><th>#</th><th>Model</th><th>Rating</th><th>W</th><th>L</th><th>T</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <h3>Export</h3>
+        <a id="report-link" class="primary-link" href="#" target="_blank">Download shareable HTML report</a>
+      </div>
+    </div>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
