@@ -1,3 +1,4 @@
+// Package domain contains the core value types and pure domain logic.
 package domain
 
 import "time"
@@ -6,7 +7,9 @@ import "time"
 type Mode string
 
 const (
-	ModePairwise   Mode = "pairwise"
+	// ModePairwise is a two-candidate comparison arena.
+	ModePairwise Mode = "pairwise"
+	// ModeTournament is a three-or-more-candidate comparison arena.
 	ModeTournament Mode = "tournament"
 )
 

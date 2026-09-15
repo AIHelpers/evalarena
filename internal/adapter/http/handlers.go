@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"evalarena/internal/domain"
 	"evalarena/internal/usecase"
 )
 
+// Server exposes the arena review/evaluation API over HTTP.
 type Server struct {
 	CreateArena  *usecase.CreateArenaUseCase
 	CastVote     *usecase.CastVoteUseCase
@@ -22,9 +24,20 @@ type Server struct {
 	Calibrate    *usecase.CalibrateReviewersUseCase
 	ExportReport *usecase.ExportReportUseCase
 	Repo         usecase.ArenaRepository
+
+	// Dataset evaluation (Phase 6 dashboard).
+	Datasets    usecase.DatasetRepository
+	EvalRuns    usecase.EvalRunRepository
+	EvalSummary *usecase.ComputeEvalSummaryUseCase
+	EvalCompare *usecase.CompareEvalRunsUseCase
+	RunEval     *usecase.RunEvaluationUseCase
 }
 
-func (s *Server) Routes() *http.ServeMux {
+// Routes returns the configured HTTP routes, wrapped in permissive CORS
+// middleware so the frontend can be served from a different origin (e.g.
+// file:// or a separate dev server) without the browser blocking fetch
+// calls with "Failed to fetch".
+func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /api/arenas", s.handleCreateArena)
@@ -41,10 +54,38 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/arenas/{id}/judge-prepass", s.handleJudgePrepass)
 	mux.HandleFunc("GET /api/arenas/{id}/report", s.handleReport)
 
+	// Dataset evaluation dashboard (Phase 6).
+	mux.HandleFunc("GET /api/datasets", s.handleListDatasets)
+	mux.HandleFunc("GET /api/datasets/{id}", s.handleGetDataset)
+	mux.HandleFunc("POST /api/eval-runs", s.handleCreateEvalRun)
+	mux.HandleFunc("GET /api/eval-runs", s.handleListEvalRuns)
+	mux.HandleFunc("GET /api/eval-runs/{id}", s.handleGetEvalRun)
+	mux.HandleFunc("GET /api/eval-runs/compare", s.handleCompareEvalRuns)
+
 	// Static frontend.
 	mux.Handle("/", http.FileServer(http.Dir("frontend")))
 
-	return mux
+	return corsMiddleware(mux)
+}
+
+// corsMiddleware adds permissive CORS headers to every response and answers
+// preflight OPTIONS requests so the browser allows cross-origin API calls.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -94,7 +135,7 @@ func (s *Server) handleCreateArena(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, arena)
 }
 
-func (s *Server) handleListArenas(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleListArenas(w http.ResponseWriter, _ *http.Request) {
 	arenas, err := s.Repo.List()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -220,6 +261,194 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(html)
+}
+
+// --- Dataset evaluation (Phase 6 dashboard) ---
+
+// handleListDatasets returns all imported golden evaluation datasets
+// (without their full items, to keep payload light for the run form).
+func (s *Server) handleListDatasets(w http.ResponseWriter, _ *http.Request) {
+	datasets, err := s.Datasets.List()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	type dsView struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Version   string `json:"version"`
+		Imported  string `json:"imported_at"`
+		ItemCount int    `json:"item_count"`
+	}
+	out := make([]dsView, 0, len(datasets))
+	for _, d := range datasets {
+		out = append(out, dsView{
+			ID:        d.ID,
+			Name:      d.Name,
+			Version:   d.Version,
+			Imported:  d.ImportedAt.Format("2006-01-02 15:04"),
+			ItemCount: len(d.Items),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleGetDataset returns a single dataset's full contents (including items)
+// so the run form can render per-item response fields.
+func (s *Server) handleGetDataset(w http.ResponseWriter, r *http.Request) {
+	ds, err := s.Datasets.Get(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ds)
+}
+
+// createEvalRunRequest is the POST /api/eval-runs payload. Responses maps
+// dataset item IDs to the model's generated output for that item.
+type createEvalRunRequest struct {
+	DatasetID      string            `json:"dataset_id"`
+	ModelLabel     string            `json:"model_label"`
+	Responses      map[string]string `json:"responses"`
+	UseRubricJudge bool              `json:"use_rubric_judge"`
+	Notes          string            `json:"notes,omitempty"`
+}
+
+// handleCreateEvalRun runs a new evaluation against a dataset with the
+// provided per-item responses, then returns the created run with summary.
+func (s *Server) handleCreateEvalRun(w http.ResponseWriter, r *http.Request) {
+	if s.RunEval == nil {
+		writeErr(w, http.StatusServiceUnavailable, errString("eval run endpoint not wired"))
+		return
+	}
+	var req createEvalRunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.DatasetID == "" || req.ModelLabel == "" {
+		writeErr(w, http.StatusBadRequest, errString("dataset_id and model_label are required"))
+		return
+	}
+	if len(req.Responses) == 0 {
+		writeErr(w, http.StatusBadRequest, errString("responses must contain at least one item"))
+		return
+	}
+	run, err := s.RunEval.Execute(usecase.RunEvaluationInput{
+		DatasetID:      req.DatasetID,
+		ModelLabel:     req.ModelLabel,
+		Responses:      req.Responses,
+		UseRubricJudge: req.UseRubricJudge,
+		Notes:          req.Notes,
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	var summary *domain.RunSummary
+	if s.EvalSummary != nil {
+		if sm, serr := s.EvalSummary.Execute(run.ID); serr == nil {
+			summary = sm
+		}
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"run":     run,
+		"summary": summary,
+	})
+}
+
+// handleListEvalRuns returns all evaluation runs and the overall score for
+// each. Optional ?dataset= filter limits to one dataset.
+func (s *Server) handleListEvalRuns(w http.ResponseWriter, r *http.Request) {
+	var runs []*domain.EvalRun
+	var err error
+	if ds := r.URL.Query().Get("dataset"); ds != "" {
+		runs, err = s.EvalRuns.ListByDataset(ds)
+	} else {
+		runs, err = s.EvalRuns.ListAll()
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	type runView struct {
+		ID         string   `json:"id"`
+		DatasetID  string   `json:"dataset_id"`
+		ModelLabel string   `json:"model_label"`
+		ScorerMode string   `json:"scorer_mode"`
+		CreatedAt  string   `json:"created_at"`
+		Notes      string   `json:"notes,omitempty"`
+		Overall    *float64 `json:"overall,omitempty"`
+		N          int      `json:"n"`
+	}
+	out := make([]runView, 0, len(runs))
+	for _, run := range runs {
+		var overall *float64
+		n := len(run.Results)
+		if s.EvalSummary != nil {
+			sum, serr := s.EvalSummary.Execute(run.ID)
+			if serr == nil {
+				v := sum.Overall
+				overall = &v
+				n = sum.N
+			}
+		}
+		out = append(out, runView{
+			ID: run.ID, DatasetID: run.DatasetID, ModelLabel: run.ModelLabel,
+			ScorerMode: string(run.ScorerMode), CreatedAt: run.CreatedAt.Format("2006-01-02 15:04"),
+			Notes: run.Notes, Overall: overall, N: n,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleGetEvalRun returns a single run with its per-item results, plus the
+// run summary (overall/by_type/by_category/by_difficulty).
+func (s *Server) handleGetEvalRun(w http.ResponseWriter, r *http.Request) {
+	run, err := s.EvalRuns.Get(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, err)
+		return
+	}
+	var summary *domain.RunSummary
+	if s.EvalSummary != nil {
+		if sm, serr := s.EvalSummary.Execute(run.ID); serr == nil {
+			summary = sm
+		}
+	}
+	type runDetail struct {
+		*domain.EvalRun
+		Summary *domain.RunSummary `json:"summary,omitempty"`
+	}
+	writeJSON(w, http.StatusOK, runDetail{run, summary})
+}
+
+// handleCompareEvalRuns compares 2+ runs. Required ?ids=run1,run2[,runN].
+func (s *Server) handleCompareEvalRuns(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("ids")
+	if raw == "" {
+		writeErr(w, http.StatusBadRequest, errString("ids query param is required (comma-separated run ids)"))
+		return
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			ids = append(ids, p)
+		}
+	}
+	if len(ids) < 2 {
+		writeErr(w, http.StatusBadRequest, errString("compare needs at least 2 run ids"))
+		return
+	}
+	cmp, err := s.EvalCompare.Execute(ids)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, cmp)
 }
 
 type errStringT string

@@ -30,6 +30,10 @@ func main() {
 	must(err)
 	random := infra.SystemRandom{}
 
+	dsRepo, erRepo, closeFn, err := openEvalRepos(dataDir)
+	must(err)
+	defer closeFn()
+
 	switch cmd {
 	case "create":
 		runCreate(args, arenaRepo, random)
@@ -39,6 +43,13 @@ func main() {
 		runReport(args, arenaRepo)
 	case "results":
 		runResults(args, arenaRepo)
+	case "dataset":
+		if len(args) < 1 {
+			fatal("dataset: subcommand required (import)")
+		}
+		runDatasetImport(args[1:], dsRepo)
+	case "eval":
+		runEval(args, dsRepo, erRepo)
 	default:
 		usage()
 		os.Exit(1)
@@ -61,7 +72,21 @@ Commands:
       Print the win-rate report (overall + by category) as JSON.
 
   report --id ARENA_ID --out FILE.html
-      Export a shareable static HTML results report.`)
+      Export a shareable static HTML results report.
+
+  dataset import --file FILE.jsonl --name NAME
+      Import a golden evaluation dataset.
+
+  eval run --dataset DS_ID --model-label LABEL --responses FILE.jsonl
+      Run an evaluation, print summary.
+  eval list [--dataset DS_ID]
+      List evaluation runs.
+  eval show --id RUN_ID [--category CAT] [--failed-only]
+      Show per-item results.
+  eval compare --ids RUN1,RUN2 [--out FILE]
+      Compare runs; export JSON/CSV/HTML.
+  eval trend --dataset DS_ID [--out trend.csv]
+      Per-run category scores ordered by time.`)
 }
 
 func runCreate(args []string, repo usecase.ArenaRepository, random usecase.RandomSource) {
@@ -137,6 +162,6 @@ func runReport(args []string, repo usecase.ArenaRepository) {
 	uc := usecase.NewExportReportUseCase(repo)
 	html, err := uc.Execute(*id)
 	must(err)
-	must(os.WriteFile(*out, html, 0o644))
+	must(os.WriteFile(*out, html, 0o600))
 	fmt.Printf("wrote %s\n", *out)
 }

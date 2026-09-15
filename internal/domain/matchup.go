@@ -35,9 +35,9 @@ type Matchup struct {
 	ReviewerOrder map[string][]int `json:"reviewer_order,omitempty"`
 }
 
-// AllVotes returns human votes plus the judge pre-pass vote (if any and if
-// no human vote exists yet), matching the "judge votes fast cases, humans
-// handle the rest" auto-pilot flow.
+// EffectiveVotes returns human votes plus the judge pre-pass vote (if any
+// and if no human vote exists yet), matching the "judge votes fast cases,
+// humans handle the rest" auto-pilot flow.
 func (m *Matchup) EffectiveVotes() []Vote {
 	votes := append([]Vote{}, m.HumanVotes...)
 	if len(votes) == 0 && m.JudgeVote != nil {

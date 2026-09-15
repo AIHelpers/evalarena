@@ -21,24 +21,30 @@ import (
 	"evalarena/internal/domain"
 )
 
+const jsonExt = ".json"
+
+// ErrNotFound is returned when a stored item does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ArenaRepository persists arenas as individual JSON files.
 type ArenaRepository struct {
 	dir string
 	mu  sync.Mutex
 }
 
+// NewArenaRepository creates an ArenaRepository rooted at dir.
 func NewArenaRepository(dir string) (*ArenaRepository, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
 	return &ArenaRepository{dir: dir}, nil
 }
 
 func (r *ArenaRepository) path(id string) string {
-	return filepath.Join(r.dir, id+".json")
+	return filepath.Join(r.dir, id+jsonExt)
 }
 
+// Save writes arena to its JSON file atomically.
 func (r *ArenaRepository) Save(arena *domain.Arena) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -47,12 +53,13 @@ func (r *ArenaRepository) Save(arena *domain.Arena) error {
 		return err
 	}
 	tmp := r.path(arena.ID) + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, r.path(arena.ID))
 }
 
+// Get returns an arena by id, or ErrNotFound.
 func (r *ArenaRepository) Get(id string) (*domain.Arena, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -70,6 +77,7 @@ func (r *ArenaRepository) Get(id string) (*domain.Arena, error) {
 	return &arena, nil
 }
 
+// List returns all arenas.
 func (r *ArenaRepository) List() ([]*domain.Arena, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -79,7 +87,7 @@ func (r *ArenaRepository) List() ([]*domain.Arena, error) {
 	}
 	var out []*domain.Arena
 	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+		if e.IsDir() || filepath.Ext(e.Name()) != jsonExt {
 			continue
 		}
 		b, err := os.ReadFile(filepath.Join(r.dir, e.Name()))
@@ -95,6 +103,7 @@ func (r *ArenaRepository) List() ([]*domain.Arena, error) {
 	return out, nil
 }
 
+// Delete removes an arena by id, returning ErrNotFound if it does not exist.
 func (r *ArenaRepository) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

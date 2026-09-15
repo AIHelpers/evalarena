@@ -7,6 +7,7 @@ import "time"
 // candidate's SourceLabel instead of "A"/"B".
 type Winner string
 
+// Winner constants.
 const (
 	WinnerA   Winner = "A"
 	WinnerB   Winner = "B"

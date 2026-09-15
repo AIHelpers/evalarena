@@ -36,6 +36,8 @@ nav { display: flex; gap: 8px; }
   cursor: pointer;
   font-size: 14px;
   color: var(--muted);
+  text-decoration: none;
+  display: inline-block;
 }
 .nav-btn.active, .tab-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
 main { max-width: 920px; margin: 0 auto; padding: 24px 20px 80px; }

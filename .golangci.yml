@@ -1,0 +1,71 @@
+# golangci-lint configuration
+# See: https://golangci-lint.run/usage/configuration/
+
+version: "2"
+
+run:
+  # Timeout for the whole linting process
+  timeout: 5m
+  # Which files/dirs to include in the analysis
+  tests: true
+
+linters:
+  # Enable additional linters
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - errcheck
+    - ineffassign
+    - revive
+    - gosec
+    - misspell
+    - unconvert
+    - goconst
+    - gocognit
+    - prealloc
+  settings:
+    govet:
+      # Enable all analyzers except fieldalignment (noise) and shadow
+      # (idiomatic scoped `err :=` is used intentionally throughout).
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    revive:
+      rules:
+        # The codebase documents exported symbols where non-trivial, but we
+        # don't want to force a doc comment on every exported identifier.
+        - name: exported
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+    gocognit:
+      min-complexity: 30
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+  exclusions:
+    rules:
+      # Ignore certain patterns in test files.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+      # gosec G304 ("Potential file inclusion via variable") flags any file
+      # access through a variable. Every G304 hit in this repo is a path the
+      # operator supplies via a CLI flag or a server-side import route -- the
+      # file path is never derived from remote/attacker-controlled input. The
+      # CLI and importers are intentionally the layer that reads
+      # user-specified files, so this diagnostic is a false positive here.
+      - text: "G304: Potential file inclusion via variable"
+        linters:
+          - gosec
+      # gosec G705 ("XSS via taint analysis") flags writing an HTML response
+      # in an HTTP handler. The report handler writes bytes produced by Go's
+      # html/template, which HTML-escapes every dynamic value before emitting
+      # them, so this is a safe, standard use of the templating engine and
+      # not a real XSS vector.
+      - text: "G705: XSS via taint analysis"
+        linters:
+          - gosec

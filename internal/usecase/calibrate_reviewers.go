@@ -1,3 +1,5 @@
+// Package usecase contains the application business logic that orchestrates
+// the domain model and infrastructure adapters.
 package usecase
 
 import "evalarena/internal/domain"

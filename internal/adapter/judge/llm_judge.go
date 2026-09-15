@@ -103,7 +103,7 @@ Decide which response better addresses the prompt (quality, correctness, helpful
 	if err != nil {
 		return domain.WinnerTie, 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var ar anthropicResponse
 	if err := json.NewDecoder(resp.Body).Decode(&ar); err != nil {
